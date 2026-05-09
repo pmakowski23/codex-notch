@@ -190,6 +190,11 @@ final class NotchPanel {
                 guard let self else { return }
                 self.setMode(self.mode == .expanded ? .collapsed : .expanded, animated: true)
             },
+            onSettings: { [weak self] in
+                guard let self else { return }
+                self.setMode(.collapsed, animated: true)
+                self.presentSettingsPanel()
+            },
             onMinimize: { [weak self] in
                 self?.setMode(.collapsed, animated: true)
             }
@@ -229,18 +234,23 @@ final class NotchPanel {
 
     private func presentSettingsPanel() {
         if settingsPanel == nil {
-            let root = SettingsModalView(settingsStore: settingsStore)
+            let root = SettingsModalView(settingsStore: settingsStore) { [weak self] in
+                self?.settingsPanel?.close()
+            }
             let hosting = NSHostingView(rootView: root)
-            hosting.frame = NSRect(x: 0, y: 0, width: 360, height: 230)
+            hosting.frame = NSRect(x: 0, y: 0, width: 420, height: 316)
 
             let panel = NSPanel(
                 contentRect: hosting.frame,
-                styleMask: [.titled, .closable],
+                styleMask: [.borderless],
                 backing: .buffered,
                 defer: false
             )
-            panel.title = "Notification Settings"
             panel.contentView = hosting
+            panel.backgroundColor = .clear
+            panel.isMovableByWindowBackground = true
+            panel.hasShadow = true
+            panel.isReleasedWhenClosed = false
             panel.level = .floating
             panel.isFloatingPanel = true
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
@@ -283,6 +293,7 @@ private struct NotchRootView: View {
     let mode: NotchPanelMode
     let onHoverChanged: (Bool) -> Void
     let onToggleExpanded: () -> Void
+    let onSettings: () -> Void
     let onMinimize: () -> Void
 
     var body: some View {
@@ -458,7 +469,7 @@ private struct NotchRootView: View {
                     header
                     HStack(spacing: 8) {
                         Button {
-                            onMinimize()
+                            onSettings()
                         } label: {
                             Image(systemName: "gearshape.fill")
                                 .font(.caption.bold())
@@ -537,59 +548,193 @@ private struct NotchRootView: View {
 
 private struct SettingsModalView: View {
     @Bindable var settingsStore: SettingsStore
+    let onClose: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Notifications")
-                .font(.headline)
-
-            compactStepper(
-                title: "Window ending",
-                suffix: "min",
-                value: $settingsStore.settings.notifyMinutesBeforeReset,
-                range: 5...240
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color.black.opacity(0.98),
+                    Color(red: 0.04, green: 0.06, blue: 0.10),
+                    Color(red: 0.02, green: 0.03, blue: 0.06),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
             )
 
-            compactStepper(
-                title: "Used below",
-                suffix: "%",
-                value: Binding(
-                    get: { Int(settingsStore.settings.notifyUsedBelowPercent) },
-                    set: { settingsStore.settings.notifyUsedBelowPercent = Double($0) }
-                ),
-                range: 5...95
-            )
+            Circle()
+                .fill(.cyan.opacity(0.18))
+                .frame(width: 220, height: 220)
+                .blur(radius: 44)
+                .offset(x: -170, y: -132)
 
-            compactStepper(
-                title: "Projected below",
-                suffix: "%",
-                value: Binding(
-                    get: { Int(settingsStore.settings.burnRateProjectionBelowPercent) },
-                    set: { settingsStore.settings.burnRateProjectionBelowPercent = Double($0) }
-                ),
-                range: 5...95
-            )
-            Spacer(minLength: 0)
+            Circle()
+                .fill(.blue.opacity(0.12))
+                .frame(width: 180, height: 180)
+                .blur(radius: 50)
+                .offset(x: 170, y: 130)
+
+            VStack(alignment: .leading, spacing: 18) {
+                header
+
+                VStack(spacing: 10) {
+                    settingControl(
+                        icon: "timer",
+                        title: "Window ending",
+                        subtitle: "Notify before a usage window resets.",
+                        suffix: "min",
+                        value: $settingsStore.settings.notifyMinutesBeforeReset,
+                        range: 5...240
+                    )
+
+                    settingControl(
+                        icon: "bell.badge",
+                        title: "Used below",
+                        subtitle: "Only alert while current usage is still low.",
+                        suffix: "%",
+                        value: Binding(
+                            get: { Int(settingsStore.settings.notifyUsedBelowPercent) },
+                            set: { settingsStore.settings.notifyUsedBelowPercent = Double($0) }
+                        ),
+                        range: 5...95
+                    )
+
+                    settingControl(
+                        icon: "chart.line.uptrend.xyaxis",
+                        title: "Projected below",
+                        subtitle: "Warn when burn rate is on track to stay under budget.",
+                        suffix: "%",
+                        value: Binding(
+                            get: { Int(settingsStore.settings.burnRateProjectionBelowPercent) },
+                            set: { settingsStore.settings.burnRateProjectionBelowPercent = Double($0) }
+                        ),
+                        range: 5...95
+                    )
+                }
+            }
+            .padding(22)
         }
-        .padding(16)
-        .frame(width: 360, height: 230)
+        .frame(width: 420, height: 316)
+        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [.white.opacity(0.22), .cyan.opacity(0.16), .white.opacity(0.08)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
     }
 
-    private func compactStepper(
+    private var header: some View {
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(.white.opacity(0.10))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(.white.opacity(0.14), lineWidth: 1)
+                    )
+
+                Image(systemName: "bell.and.waves.left.and.right.fill")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(
+                        LinearGradient(
+                            colors: [.cyan, .blue],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .frame(width: 44, height: 44)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Notification Settings")
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.96))
+                Text("Tune when Codex usage nudges should appear.")
+                    .font(.caption)
+                    .foregroundStyle(.white.opacity(0.58))
+            }
+
+            Spacer(minLength: 0)
+
+            Button(action: onClose) {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .frame(width: 28, height: 28)
+                    .background(.white.opacity(0.08), in: Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(.white.opacity(0.10), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Close settings")
+        }
+    }
+
+    private func settingControl(
+        icon: String,
         title: String,
+        subtitle: String,
         suffix: String,
         value: Binding<Int>,
         range: ClosedRange<Int>
     ) -> some View {
-        HStack {
-            Text(title)
-                .font(.subheadline)
-            Spacer()
+        HStack(alignment: .center, spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(.white.opacity(0.08))
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.cyan.opacity(0.88))
+            }
+            .frame(width: 34, height: 34)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.92))
+                Text(subtitle)
+                    .font(.caption2)
+                    .foregroundStyle(.white.opacity(0.52))
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 8)
+
             Text("\(value.wrappedValue) \(suffix)")
-                .font(.subheadline.monospacedDigit().weight(.semibold))
+                .font(.caption.monospacedDigit().weight(.bold))
+                .foregroundStyle(.white.opacity(0.94))
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(.white.opacity(0.10))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(.white.opacity(0.12), lineWidth: 1)
+                )
+
             Stepper("", value: value, in: range, step: 5)
                 .labelsHidden()
-                .frame(width: 76)
+                .controlSize(.small)
+                .frame(width: 68)
         }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(.white.opacity(0.075))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(.white.opacity(0.11), lineWidth: 1)
+        )
     }
 }

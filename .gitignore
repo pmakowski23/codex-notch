@@ -12,6 +12,7 @@ DerivedData/
 xcuserdata/
 
 # Build outputs and archives
+dist/
 *.app
 *.dSYM/
 *.ipa

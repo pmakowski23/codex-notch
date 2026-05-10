@@ -43,6 +43,41 @@ swift test
 
 When launched with `swift run`, the app starts as an accessory-style macOS process and shows the floating usage panel. Notification delivery is intentionally guarded so it only fires from a packaged `.app` bundle.
 
+## Release Builds
+
+Create a versioned `.app` bundle and zip archive:
+
+```sh
+Scripts/build-app.sh --version 0.1.0
+```
+
+If `--build` is omitted, the script uses the current timestamp as `CFBundleVersion` so each build is monotonic.
+
+The script writes build artifacts to `dist/`:
+
+```text
+dist/
+  Codex Usage.app
+  CodexUsage-0.1.0.zip
+```
+
+Install the freshly built app into `/Applications`:
+
+```sh
+Scripts/build-app.sh --version 0.1.0 --install
+```
+
+By default, the app is ad-hoc signed for local use. To create a Developer ID signed build, pass a signing identity:
+
+```sh
+Scripts/build-app.sh \
+  --version 0.1.0 \
+  --build 12 \
+  --sign "Developer ID Application: Example, Inc. (TEAMID)"
+```
+
+For public distribution outside your Mac, notarize the resulting archive with Apple after signing it with a Developer ID certificate.
+
 ## How It Works
 
 Codex Usage combines two local data sources:
